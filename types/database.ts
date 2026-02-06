@@ -13,18 +13,24 @@ export interface Database {
         Row: {
           id: string
           name: string
+          name_en: string | null
+          name_ko: string | null
           image_url: string | null
           created_at: string
         }
         Insert: {
           id?: string
           name: string
+          name_en?: string | null
+          name_ko?: string | null
           image_url?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           name?: string
+          name_en?: string | null
+          name_ko?: string | null
           image_url?: string | null
           created_at?: string
         }
@@ -164,6 +170,35 @@ export interface Database {
           wrong_count: number
           song_title: string
           artist_name: string
+        }[]
+      }
+      search_artists_fuzzy: {
+        Args: { search_query: string }
+        Returns: {
+          id: string
+          name: string
+          name_en: string | null
+          name_ko: string | null
+          image_url: string | null
+          created_at: string
+          similarity_score: number
+        }[]
+      }
+      search_songs_fuzzy: {
+        Args: { search_query: string }
+        Returns: {
+          id: string
+          artist_id: string
+          album_id: string | null
+          title: string
+          summary: string | null
+          vocabs: Vocab[]
+          created_at: string
+          artist_name: string
+          artist_name_en: string | null
+          artist_name_ko: string | null
+          artist_image_url: string | null
+          similarity_score: number
         }[]
       }
     }

@@ -2,15 +2,16 @@
 
 import { createClient } from '@/lib/supabase-server'
 
-// 가수 검색
+// 가수 검색 (일본어, 영어, 한글 모두 검색 - Trigram 유사도 검색)
 export async function searchArtists(query: string) {
   const supabase = await createClient()
 
-  const { data, error } = await supabase
-    .from('artists')
-    .select('*')
-    .ilike('name', `%${query}%`)
-    .limit(20)
+  // Use fuzzy search function with pg_trgm
+  // Handles typos, spacing differences, and partial matches
+  // Example: "원오크록" matches "원 오크 록"
+  const { data, error } = await supabase.rpc('search_artists_fuzzy', {
+    search_query: query,
+  })
 
   if (error) {
     return { error: error.message, data: null }
@@ -19,20 +20,15 @@ export async function searchArtists(query: string) {
   return { data, error: null }
 }
 
-// 노래 검색 (가수명 포함)
+// 노래 검색 (가수명 포함 - 일본어, 영어, 한글 - Trigram 유사도 검색)
 export async function searchSongs(query: string) {
   const supabase = await createClient()
 
-  const { data, error } = await supabase
-    .from('songs')
-    .select(
-      `
-      *,
-      artist:artists(id, name, image_url)
-    `
-    )
-    .or(`title.ilike.%${query}%,artist.name.ilike.%${query}%`)
-    .limit(20)
+  // Use fuzzy search function with pg_trgm
+  // Searches in song title and artist names with fuzzy matching
+  const { data, error } = await supabase.rpc('search_songs_fuzzy', {
+    search_query: query,
+  })
 
   if (error) {
     return { error: error.message, data: null }
@@ -78,7 +74,7 @@ export async function getSongWithVocabs(songId: string) {
     .select(
       `
       *,
-      artist:artists(id, name, image_url),
+      artist:artists(id, name, name_en, name_ko, image_url),
       album:albums(id, title, cover_image_url)
     `
     )
@@ -117,7 +113,7 @@ export async function getRecentSongs(limit: number = 10) {
     .select(
       `
       *,
-      artist:artists(id, name, image_url)
+      artist:artists(id, name, name_en, name_ko, image_url)
     `
     )
     .order('created_at', { ascending: false })
