@@ -32,7 +32,10 @@ npx supabase db reset # Reset local database and apply migrations
 ### Database Migrations
 - Migration files are in `supabase/migrations/`
 - Apply to cloud: Copy SQL to Supabase Dashboard > SQL Editor
-- Seed data: Use `supabase/seed-artists.sql` (not auto-loaded)
+- Seed data:
+  - `supabase/seed-artists.sql` - Initial artist data (24 artists with multi-language names)
+  - `supabase/seed-sample-song.sql` - Sample song (BUMP OF CHICKEN - ray)
+  - `supabase/update-ray-vocabs.sql` - Update vocabs with validated data (46 words)
 
 ## Architecture
 
@@ -46,7 +49,16 @@ npx supabase db reset # Reset local database and apply migrations
   - Indexes on all three fields for efficient multi-language search
 - `albums` - Album information (optional, can be added later)
 - `songs` - Song information with:
-  - `summary` (TEXT) - LLM-generated song summary
+  - `summary` (TEXT) - LLM-generated song summary with structured format:
+    ```
+    메인 설명
+
+    🎭 분위기: mood1, mood2, ...
+
+    🔑 키워드: word1 (translation), word2 (translation), ...
+
+    📖 테마: theme1, theme2, ...
+    ```
   - `vocabs` (JSONB) - Array of vocabulary objects: `[{name, meaning, pronunciation}]`
   - GIN index on `vocabs` for efficient JSONB queries
 
@@ -54,7 +66,15 @@ npx supabase db reset # Reset local database and apply migrations
 - `favorites` - Polymorphic favorites (artist or song) using `favoritable_type` and `favoritable_id`
 - `wrong_vocabs` - User's incorrect vocabulary records with `wrong_count` for spaced repetition
 
+**Database Extensions:**
+- `pg_trgm` - Trigram-based fuzzy text search with GIN indexes on all artist name fields
+  - Handles spacing variations (e.g., "원오크록" matches "원 오크 록")
+  - Similarity threshold: 0.2 (configurable in search functions)
+
 **Database Functions:**
+- `search_artists_fuzzy(search_query)` - Multi-language fuzzy search across name/name_en/name_ko
+  - Returns results with `similarity_score` for ranking
+- `search_songs_fuzzy(search_query)` - Fuzzy search on song titles with artist info
 - `get_favorite_vocabs(p_user_id)` - Retrieve all vocabs from favorited artists/songs
 - `get_wrong_vocabs_for_review(p_user_id, p_limit)` - Get wrong vocabs sorted by `wrong_count` DESC
 
@@ -159,6 +179,29 @@ The `favorites` table uses a polymorphic pattern:
 - User tables (favorites, wrong_vocabs): Full CRUD only for own data
 - Never expose raw database credentials in client-side code
 
+### Data Quality & Validation Workflow
+
+**Two-Stage Approach (Cost-Effective):**
+1. **Generation**: Use smaller model (qwen3:14b via Ollama) to extract vocabs from lyrics
+   - Input: Song lyrics (Japanese)
+   - Output: YAML summary + CSV vocabulary list
+   - Cost: ~$0 (local processing)
+
+2. **Validation**: Use Claude Sonnet 4.5 to verify and correct vocabulary
+   - Input: CSV vocab list only (no lyrics needed)
+   - Output: Corrected CSV with accurate meanings and pronunciations
+   - Cost: ~$0.029 per song vs $0.037 for single-stage (22% savings)
+
+**Related Projects:**
+- `jpn-lyrics-converter` - External project for lyrics → vocab extraction
+  - Located at: `/Users/syenty/SyentyProject/jpn-lyrics-converter/`
+  - Outputs: `outputs/{artist}_{song}_vocab_{timestamp}_{model}.csv`
+
+**Updating Validated Data:**
+- Use `supabase/update-ray-vocabs.sql` as template
+- Maps CSV columns: `japanese→name`, `korean→meaning`, `romaji→pronunciation`
+- Finds song by title and artist, updates `vocabs` JSONB field
+
 ### Future LLM Integration
 
 When implementing lyrics processing:
@@ -189,6 +232,34 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 ```
 
 Note: `.env.local` is gitignored - never commit credentials
+
+## Features
+
+### Search
+- Multi-language fuzzy search (Japanese, English romanization, Korean)
+- Real-time search with 300ms debounce
+- Three tabs: All, Artists, Songs
+- Powered by pg_trgm similarity scoring
+
+### Favorites
+- Polymorphic system supporting both artists and songs
+- Two tabs: favorite artists and favorite songs
+- One-click add/remove with optimistic UI updates
+
+### Vocabulary Test
+- Three test modes:
+  - JP→KR: Japanese word → Korean meaning
+  - KR→JP: Korean meaning → Japanese word
+  - Random: Mix of both modes
+- Question count selection: 10, 20, or all vocabs
+- Multiple choice with 4 options (1 correct + 3 distractors from same song)
+- Immediate feedback with color coding
+- Auto-save wrong answers for review
+
+### Review
+- Shows all vocabulary from favorited content
+- Wrong vocab statistics with frequency tracking
+- Flip card interface for active learning
 
 ## Project Status
 
