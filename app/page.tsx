@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase-server'
-import { signOut } from './actions/auth'
+import Navigation from './components/Navigation'
+import Link from 'next/link'
 
 export default async function Home() {
   const supabase = await createClient()
@@ -14,72 +15,123 @@ export default async function Home() {
     redirect('/login')
   }
 
-  // 테스트: artists 데이터 조회
+  // 전체 아티스트 조회
   const { data: artists } = await supabase
     .from('artists')
     .select('*')
-    .limit(5)
+    .order('name')
+    .limit(12)
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* 헤더 */}
-      <header className="bg-white dark:bg-gray-800 shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Utavoca
-          </h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              {user.email}
-            </span>
-            <form action={signOut}>
-              <button
-                type="submit"
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md"
-              >
-                로그아웃
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
+    <>
+      <Navigation userEmail={user.email} />
 
       {/* 메인 컨텐츠 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* 환영 메시지 */}
         <div className="mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
             환영합니다! 🎵
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400">
-            일본 노래 가사로 일본어를 배워보세요.
+          </h1>
+          <p className="text-lg text-gray-600 dark:text-gray-400">
+            일본 노래 가사로 일본어를 배워보세요
           </p>
         </div>
 
-        {/* 가수 목록 (테스트) */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            가수 목록
-          </h3>
+        {/* 아티스트 그리드 */}
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              아티스트
+            </h2>
+            <Link
+              href="/search"
+              className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium text-sm"
+            >
+              전체 보기 →
+            </Link>
+          </div>
+
           {artists && artists.length > 0 ? (
-            <ul className="space-y-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
               {artists.map((artist) => (
-                <li
+                <Link
                   key={artist.id}
-                  className="p-3 bg-gray-50 dark:bg-gray-700 rounded-md"
+                  href={`/artists/${artist.id}`}
+                  className="group"
                 >
-                  <span className="text-gray-900 dark:text-white font-medium">
-                    {artist.name}
-                  </span>
-                </li>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-lg transition-shadow p-4 text-center">
+                    {/* 아티스트 이미지 플레이스홀더 */}
+                    <div className="w-20 h-20 mx-auto mb-3 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                      {artist.name.charAt(0)}
+                    </div>
+
+                    {/* 아티스트 이름 */}
+                    <h3 className="font-medium text-gray-900 dark:text-white text-sm mb-1 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                      {artist.name}
+                    </h3>
+
+                    {/* 영어/한글 이름 */}
+                    {artist.name_ko && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {artist.name_ko}
+                      </p>
+                    )}
+                  </div>
+                </Link>
               ))}
-            </ul>
+            </div>
           ) : (
-            <p className="text-gray-500 dark:text-gray-400">
-              아직 등록된 가수가 없습니다. 관리자에게 문의하세요.
-            </p>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
+              <p className="text-gray-500 dark:text-gray-400">
+                아직 등록된 아티스트가 없습니다
+              </p>
+            </div>
           )}
         </div>
+
+        {/* 빠른 시작 카드 */}
+        <div className="grid md:grid-cols-3 gap-6">
+          <Link
+            href="/search"
+            className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
+          >
+            <div className="text-3xl mb-3">🔍</div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              검색하기
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              아티스트와 노래를 검색해보세요
+            </p>
+          </Link>
+
+          <Link
+            href="/favorites"
+            className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
+          >
+            <div className="text-3xl mb-3">⭐</div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              즐겨찾기
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              좋아하는 아티스트와 노래 모음
+            </p>
+          </Link>
+
+          <Link
+            href="/review"
+            className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
+          >
+            <div className="text-3xl mb-3">📝</div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              복습하기
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              틀린 단어를 다시 공부해보세요
+            </p>
+          </Link>
+        </div>
       </main>
-    </div>
+    </>
   )
 }

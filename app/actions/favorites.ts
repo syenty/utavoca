@@ -31,8 +31,11 @@ export async function addFavorite(
   return { success: true }
 }
 
-// 즐겨찾기 삭제
-export async function removeFavorite(favoriteId: string) {
+// 즐겨찾기 삭제 (type과 id로 삭제)
+export async function removeFavorite(
+  favoritableType: 'artist' | 'song',
+  favoritableId: string
+) {
   const supabase = await createClient()
   const {
     data: { user },
@@ -45,8 +48,9 @@ export async function removeFavorite(favoriteId: string) {
   const { error } = await supabase
     .from('favorites')
     .delete()
-    .eq('id', favoriteId)
     .eq('user_id', user.id)
+    .eq('favoritable_type', favoritableType)
+    .eq('favoritable_id', favoritableId)
 
   if (error) {
     return { error: error.message }
