@@ -32,6 +32,11 @@ npx supabase db reset # Reset local database and apply migrations
 ### Database Migrations
 - Migration files are in `supabase/migrations/`
 - Apply to cloud: Copy SQL to Supabase Dashboard > SQL Editor
+- Key migrations:
+  - `20260206000000_add_artist_name_translations.sql` - Multi-language artist names
+  - `20260206000001_enable_pg_trgm.sql` - Fuzzy search extension and indexes
+  - `20260206000002_create_search_functions.sql` - Search RPC functions
+  - `20260206000003_create_get_artists_sorted.sql` - Complex sorting function for home page
 - Seed data:
   - `supabase/seed-artists.sql` - Initial artist data (24 artists with multi-language names)
   - `supabase/seed-sample-song.sql` - Sample song (BUMP OF CHICKEN - ray)
@@ -72,6 +77,11 @@ npx supabase db reset # Reset local database and apply migrations
   - Similarity threshold: 0.2 (configurable in search functions)
 
 **Database Functions:**
+- `get_artists_sorted(p_limit)` - Returns artists with complex sorting:
+  - Sort order: favorite_count DESC → created_at ASC → song_count DESC → name ASC
+  - Includes aggregated `favorite_count` and `song_count` for each artist
+  - Fallback mechanism: If RPC fails, falls back to simple name-based query
+  - To change sort order: Update this function only, no app code changes needed
 - `search_artists_fuzzy(search_query)` - Multi-language fuzzy search across name/name_en/name_ko
   - Returns results with `similarity_score` for ranking
 - `search_songs_fuzzy(search_query)` - Fuzzy search on song titles with artist info
@@ -234,6 +244,12 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 Note: `.env.local` is gitignored - never commit credentials
 
 ## Features
+
+### Home Page
+- Artist grid with intelligent sorting (popularity + recency + content)
+- Complex sort order: Most favorited → Oldest → Most songs → Alphabetical
+- Graceful degradation: Falls back to alphabetical if sort function unavailable
+- Quick start cards for Search, Favorites, and Review
 
 ### Search
 - Multi-language fuzzy search (Japanese, English romanization, Korean)

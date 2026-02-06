@@ -7,12 +7,19 @@
 ### 핵심 기능
 
 1. 노래 가사 텍스트 파일을 LLM을 이용해 summaries, vocabs 2개의 entity로 변환
+   - 2단계 검증: 소형 모델(qwen3:14b) 생성 → 대형 모델(Claude Sonnet 4.5) 검증
+   - 비용 효율적인 데이터 품질 관리 (22% 비용 절감)
 2. 변환된 데이터를 DB에 저장
 3. summaries, vocabs 데이터들은 가수, 노래 제목에 종속
 4. 사용자는 가수, 노래 검색을 통해 해당하는 summaries, vocabs 정보 조회 가능
-5. vocabs 정보 조회 후 해당 등록된 단어들로 랜덤 단어 테스트 가능
-6. 사용자는 자신이 좋아하는 가수 or 노래를 즐겨찾기에 등록해 단어 테스트 가능
+   - **다국어 퍼지 검색**: 일본어, 영어 로마자, 한글로 검색 가능
+   - **오타 허용**: 띄어쓰기/오타 자동 보정 (pg_trgm 기반)
+5. **지능적인 아티스트 정렬**: 인기도(즐겨찾기) + 등록일 + 콘텐츠량 기반 정렬
+6. vocabs 정보 조회 후 해당 등록된 단어들로 랜덤 단어 테스트 가능
+   - 3가지 테스트 모드: JP→KR, KR→JP, 랜덤 믹스
+7. 사용자는 자신이 좋아하는 가수 or 노래를 즐겨찾기에 등록해 단어 테스트 가능
    - 즐겨찾기 등록 시 해당하는 모든 vocabs 조회 후 랜덤으로 추출해 단어 테스트 진행
+8. 틀린 단어 자동 저장 및 복습 기능
 
 ### 기술 스택
 
@@ -30,10 +37,17 @@
 ```sql
 CREATE TABLE artists (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
+  name TEXT NOT NULL,              -- 일본어 이름
+  name_en TEXT,                     -- 영어/로마자 이름
+  name_ko TEXT,                     -- 한글 이름
   image_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- 퍼지 검색을 위한 trigram 인덱스
+CREATE INDEX idx_artists_name_trgm ON artists USING gin(name gin_trgm_ops);
+CREATE INDEX idx_artists_name_en_trgm ON artists USING gin(name_en gin_trgm_ops);
+CREATE INDEX idx_artists_name_ko_trgm ON artists USING gin(name_ko gin_trgm_ops);
 ```
 
 #### albums (앨범)
@@ -164,27 +178,50 @@ CREATE INDEX idx_wrong_vocabs_lookup ON wrong_vocabs(user_id, song_id, vocab_wor
 
 ### 1. 가사 데이터 처리 (관리자)
 
+**2단계 검증 워크플로우 (비용 최적화):**
+
 ```
+[1단계: 생성]
 가사 텍스트 파일 입력
   ↓
-LLM API 호출
-  - summary 생성
+소형 LLM (qwen3:14b via Ollama - 로컬 무료)
+  - summary 생성 (분위기, 키워드, 테마)
   - vocabs 추출 (name, meaning, pronunciation)
   ↓
-songs 테이블에 저장
+CSV 파일 출력
+
+[2단계: 검증]
+생성된 CSV 입력
+  ↓
+Claude Sonnet 4.5 API
+  - 발음(romaji) 정확도 검증
+  - 번역(meaning) 정확성 검증
+  - 오류 자동 수정
+  ↓
+검증된 CSV 출력
+
+[3단계: 저장]
+검증된 데이터를 songs 테이블에 저장
   - artist_id, title (필수)
-  - album_id (nullable, 나중에 업데이트)
-  - summary, vocabs (LLM 생성)
+  - album_id (nullable)
+  - summary (이모지 기반 구조화 포맷)
+  - vocabs (JSONB 배열)
 ```
 
-**LLM 프롬프트 예시:**
+**비용 효율성:**
+- 2단계 방식: ~$0.029/곡 (생성 $0 + 검증 $0.029)
+- 1단계 방식: ~$0.037/곡 (Claude 직접 생성)
+- **절감률: 22%**
+
+**summary 구조화 포맷:**
 ```
-일본 노래 가사에서 학습할 가치가 있는 단어들을 추출하고,
-각 단어의 한국어 뜻과 로마자 발음을 JSON 배열로 반환해줘.
+이별 후의 아픔과 그리움을 안고 살아가는 과정을 그린 노래
 
-형식: [{"name": "일본어단어", "meaning": "한국어뜻", "pronunciation": "로마자발음"}]
+🎭 분위기: 슬픔, 그리움, 희망, 위로
 
-추가로 이 가사의 전체적인 의미를 2-3문장으로 요약해줘.
+🔑 키워드: お別れ (이별), 痛み (아픔), 透明な彗星 (투명한 혜성)
+
+📖 테마: 이별과 상실, 아픔과 치유, 추억과 그리움
 ```
 
 ### 2. 단어 테스트
@@ -236,22 +273,38 @@ wrong_count 높은 순으로 정렬
 
 ### 3. 검색 및 조회
 
-**가수/노래 검색:**
-```sql
--- 가수 검색
-SELECT * FROM artists WHERE name ILIKE '%검색어%';
+**다국어 퍼지 검색 (pg_trgm 기반):**
 
--- 노래 검색 (가수명 포함)
-SELECT s.*, a.name as artist_name 
-FROM songs s
-JOIN artists a ON s.artist_id = a.id
-WHERE s.title ILIKE '%검색어%' 
-   OR a.name ILIKE '%검색어%';
+```sql
+-- 가수 퍼지 검색 (일본어, 영어, 한글 지원)
+-- 예: "원오크록", "원 오크 록", "ONE OK ROCK" 모두 매칭
+SELECT * FROM search_artists_fuzzy('검색어');
+
+-- 내부 구현
+SELECT
+  a.*,
+  GREATEST(
+    similarity(a.name, '검색어'),
+    similarity(a.name_en, '검색어'),
+    similarity(a.name_ko, '검색어')
+  ) as similarity_score
+FROM artists a
+WHERE
+  a.name % '검색어' OR
+  a.name_en % '검색어' OR
+  a.name_ko % '검색어'
+ORDER BY similarity_score DESC;
 ```
+
+**특징:**
+- 띄어쓰기 오류 허용
+- 오타 자동 보정 (유사도 0.2 이상)
+- 다국어 동시 검색
+- 유사도 점수로 정렬
 
 **특정 단어 포함 노래 검색:**
 ```sql
-SELECT * FROM songs 
+SELECT * FROM songs
 WHERE vocabs @> '[{"name": "愛"}]';
 ```
 
@@ -265,11 +318,32 @@ WHERE vocabs @> '[{"name": "愛"}]';
    - GIN 인덱스로 vocabs 검색 성능 확보
    - 대량의 vocab 데이터도 빠른 검색 가능
 
-2. **즐겨찾기 조회 최적화**
+2. **pg_trgm 퍼지 검색**
+   - GIN 인덱스로 trigram 기반 유사도 검색
+   - 다국어 검색 성능 최적화
+   - 오타/띄어쓰기 허용으로 UX 개선
+
+3. **복합 정렬 RPC 함수**
+   ```sql
+   CREATE FUNCTION get_artists_sorted(p_limit INT)
+   RETURNS TABLE (
+     id UUID,
+     name TEXT,
+     favorite_count BIGINT,
+     song_count BIGINT,
+     ...
+   )
+   -- 정렬: 즐겨찾기 수 DESC → 등록일 ASC → 노래 수 DESC → 이름 ASC
+   ```
+   - 데이터베이스 레벨에서 집계 및 정렬
+   - 애플리케이션 코드 변경 없이 정렬 로직 수정 가능
+   - Fallback 메커니즘으로 안정성 확보
+
+4. **즐겨찾기 조회 최적화**
    - 복합 인덱스 활용
    - 자주 조회되는 데이터이므로 캐싱 고려
 
-3. **랜덤 추출 최적화**
+5. **랜덤 추출 최적화**
    - PostgreSQL의 `TABLESAMPLE` 또는 `ORDER BY RANDOM()` 활용
    - 대량 데이터 시 성능 모니터링 필요
 
