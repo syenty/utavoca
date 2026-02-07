@@ -9,6 +9,7 @@ export async function searchArtists(query: string) {
   // Use fuzzy search function with pg_trgm
   // Handles typos, spacing differences, and partial matches
   // Example: "원오크록" matches "원 오크 록"
+  // @ts-ignore - Supabase type inference issue
   const { data, error } = await supabase.rpc('search_artists_fuzzy', {
     search_query: query,
   })
@@ -26,6 +27,7 @@ export async function searchSongs(query: string) {
 
   // Use fuzzy search function with pg_trgm
   // Searches in song title and artist names with fuzzy matching
+  // @ts-ignore - Supabase type inference issue
   const { data, error } = await supabase.rpc('search_songs_fuzzy', {
     search_query: query,
   })

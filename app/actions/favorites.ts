@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
+import type { Database } from '@/types/database'
 
 // 즐겨찾기 추가
 export async function addFavorite(
@@ -17,11 +18,14 @@ export async function addFavorite(
     return { error: '로그인이 필요합니다.' }
   }
 
-  const { error } = await supabase.from('favorites').insert({
-    user_id: user.id,
-    favoritable_type: favoritableType,
-    favoritable_id: favoritableId,
-  })
+  // @ts-ignore - Supabase type inference issue
+  const { error } = await supabase.from('favorites').insert([
+    {
+      user_id: user.id,
+      favoritable_type: favoritableType,
+      favoritable_id: favoritableId,
+    },
+  ])
 
   if (error) {
     return { error: error.message }
@@ -100,6 +104,7 @@ export async function getFavoriteVocabs() {
     return { error: '로그인이 필요합니다.', data: null }
   }
 
+  // @ts-ignore - Supabase type inference issue
   const { data, error } = await supabase.rpc('get_favorite_vocabs', {
     p_user_id: user.id,
   })

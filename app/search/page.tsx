@@ -179,8 +179,8 @@ export default function SearchPage() {
               일본어, 영어, 한글 모두 검색 가능합니다
             </p>
             <div className="mt-6 text-sm text-gray-500 dark:text-gray-500 space-y-1">
-              <p>예: "후지이", "Fujii", "藤井"</p>
-              <p>예: "원오크록", "ONE OK ROCK"</p>
+              <p>예: &quot;후지이&quot;, &quot;Fujii&quot;, &quot;藤井&quot;</p>
+              <p>예: &quot;원오크록&quot;, &quot;ONE OK ROCK&quot;</p>
             </div>
           </div>
         ) : totalResults === 0 && !loading ? (
@@ -191,7 +191,7 @@ export default function SearchPage() {
               검색 결과가 없습니다
             </h2>
             <p className="text-gray-600 dark:text-gray-400">
-              "{query}"에 대한 결과를 찾을 수 없습니다
+              &quot;{query}&quot;에 대한 결과를 찾을 수 없습니다
             </p>
           </div>
         ) : (

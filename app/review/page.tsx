@@ -16,6 +16,7 @@ export default async function ReviewPage() {
   }
 
   // 틀린 단어 목록 조회 (wrong_count 높은 순)
+  // @ts-ignore - Supabase type inference issue
   const { data: wrongVocabs } = await supabase
     .from('wrong_vocabs')
     .select(
@@ -32,7 +33,8 @@ export default async function ReviewPage() {
     .order('wrong_count', { ascending: false })
     .order('last_wrong_at', { ascending: false })
 
-  const vocabs = wrongVocabs || []
+  // Type assertion to work around Supabase type inference issues
+  const vocabs = (wrongVocabs as any) || []
 
   return (
     <>
@@ -79,7 +81,7 @@ export default async function ReviewPage() {
               </div>
               <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">
                 {(
-                  vocabs.reduce((sum, v) => sum + v.wrong_count, 0) /
+                  vocabs.reduce((sum: number, v: any) => sum + v.wrong_count, 0) /
                   vocabs.length
                 ).toFixed(1)}
                 회

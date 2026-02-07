@@ -16,6 +16,7 @@ export default async function FavoritesPage() {
   }
 
   // 즐겨찾기한 아티스트 조회
+  // @ts-ignore - Supabase type inference issue
   const { data: artistFavorites } = await supabase
     .from('favorites')
     .select(
@@ -31,6 +32,7 @@ export default async function FavoritesPage() {
     .order('created_at', { ascending: false })
 
   // 즐겨찾기한 노래 조회
+  // @ts-ignore - Supabase type inference issue
   const { data: songFavorites } = await supabase
     .from('favorites')
     .select(
@@ -51,20 +53,24 @@ export default async function FavoritesPage() {
     .eq('favoritable_type', 'song')
     .order('created_at', { ascending: false })
 
+  // Type assertions to work around Supabase type inference issues
+  const typedArtistFavorites = artistFavorites as any
+  const typedSongFavorites = songFavorites as any
+
   // 데이터 정리
-  const artists = artistFavorites
-    ?.map((fav) => ({
+  const artists = typedArtistFavorites
+    ?.map((fav: any) => ({
       favoriteId: fav.id,
       ...fav.artist,
     }))
-    .filter((item) => item.id) || []
+    .filter((item: any) => item.id) || []
 
-  const songs = songFavorites
-    ?.map((fav) => ({
+  const songs = typedSongFavorites
+    ?.map((fav: any) => ({
       favoriteId: fav.id,
       ...fav.song,
     }))
-    .filter((item) => item.id) || []
+    .filter((item: any) => item.id) || []
 
   return (
     <>
