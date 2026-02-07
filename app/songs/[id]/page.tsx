@@ -16,14 +16,10 @@ export default async function SongPage({ params }: SongPageProps) {
   const { id } = await params
   const supabase = await createClient()
 
-  // 로그인 확인
+  // 로그인 선택사항 (조회는 누구나 가능)
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/login')
-  }
 
   // 노래 정보 조회 (아티스트 정보 포함)
   // @ts-ignore - Supabase type inference issue
@@ -42,17 +38,20 @@ export default async function SongPage({ params }: SongPageProps) {
     notFound()
   }
 
-  // 즐겨찾기 여부 확인
-  // @ts-ignore - Supabase type inference issue
-  const { data: favorite } = await supabase
-    .from('favorites')
-    .select('id')
-    .eq('user_id', user.id)
-    .eq('favoritable_type', 'song')
-    .eq('favoritable_id', id)
-    .single()
+  // 즐겨찾기 여부 확인 (로그인한 경우만)
+  let isFavorited = false
+  if (user) {
+    // @ts-ignore - Supabase type inference issue
+    const { data: favorite } = await supabase
+      .from('favorites')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('favoritable_type', 'song')
+      .eq('favoritable_id', id)
+      .single()
 
-  const isFavorited = !!favorite
+    isFavorited = !!favorite
+  }
 
   // Type assertion to work around Supabase type inference issues
   const typedSong = song as any
@@ -60,7 +59,7 @@ export default async function SongPage({ params }: SongPageProps) {
 
   return (
     <>
-      <Navigation userEmail={user.email} />
+      <Navigation userEmail={user?.email} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* 노래 헤더 */}
@@ -119,7 +118,7 @@ export default async function SongPage({ params }: SongPageProps) {
 
                 {vocabs.length > 0 && (
                   <Link
-                    href={`/test/${id}`}
+                    href={user ? `/test/${id}` : '/login'}
                     className="inline-flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-medium rounded-lg transition-colors"
                   >
                     <span>✏️</span>
