@@ -11,21 +11,25 @@
    - 비용 효율적인 데이터 품질 관리 (22% 비용 절감)
 2. 변환된 데이터를 DB에 저장
 3. summaries, vocabs 데이터들은 가수, 노래 제목에 종속
-4. 사용자는 가수, 노래 검색을 통해 해당하는 summaries, vocabs 정보 조회 가능
+4. **하이브리드 인증 시스템**: 로그인 없이 자유롭게 검색/조회, 회원 기능(즐겨찾기/테스트)만 로그인 필요
+5. 사용자는 가수, 노래 검색을 통해 해당하는 summaries, vocabs 정보 조회 가능
    - **다국어 퍼지 검색**: 일본어, 영어 로마자, 한글로 검색 가능
    - **오타 허용**: 띄어쓰기/오타 자동 보정 (pg_trgm 기반)
-5. **지능적인 아티스트 정렬**: 인기도(즐겨찾기) + 등록일 + 콘텐츠량 기반 정렬
-6. vocabs 정보 조회 후 해당 등록된 단어들로 랜덤 단어 테스트 가능
+6. **지능적인 아티스트 정렬**: 인기도(즐겨찾기) + 등록일 + 콘텐츠량 기반 정렬
+7. vocabs 정보 조회 후 해당 등록된 단어들로 랜덤 단어 테스트 가능
    - 3가지 테스트 모드: JP→KR, KR→JP, 랜덤 믹스
-7. 사용자는 자신이 좋아하는 가수 or 노래를 즐겨찾기에 등록해 단어 테스트 가능
+8. 사용자는 자신이 좋아하는 가수 or 노래를 즐겨찾기에 등록해 단어 테스트 가능
    - 즐겨찾기 등록 시 해당하는 모든 vocabs 조회 후 랜덤으로 추출해 단어 테스트 진행
-8. 틀린 단어 자동 저장 및 복습 기능
+9. 틀린 단어 자동 저장 및 복습 기능
+10. **PWA 지원**: PC와 모바일에 앱 형태로 설치 가능, 오프라인 캐싱 지원
 
 ### 기술 스택
 
-- **Frontend/Backend**: Next.js
+- **Frontend/Backend**: Next.js 15 (App Router)
 - **Database**: PostgreSQL (Supabase)
 - **AI**: LLM (가사 분석 및 vocab 추출)
+- **PWA**: @ducanh2912/next-pwa (PC/모바일 앱 설치 지원)
+- **Styling**: Tailwind CSS
 
 ---
 
@@ -368,7 +372,7 @@ WHERE vocabs @> '[{"name": "愛"}]';
    CREATE POLICY "Users can only access their own favorites"
      ON favorites FOR ALL
      USING (auth.uid() = user_id);
-   
+
    -- songs는 모두 조회 가능
    CREATE POLICY "Anyone can view songs"
      ON songs FOR SELECT
@@ -377,6 +381,159 @@ WHERE vocabs @> '[{"name": "愛"}]';
 
 2. **Real-time Subscriptions**
    - 즐겨찾기 추가/삭제 시 실시간 UI 업데이트
+
+3. **하이브리드 인증 시스템**
+
+   **공개 페이지 (로그인 불필요):**
+   - 홈 페이지 (아티스트 목록)
+   - 검색 페이지 (아티스트, 노래 검색)
+   - 아티스트 상세 페이지
+   - 노래 상세 페이지 (단어 목록 조회)
+
+   **보호 페이지 (로그인 필수):**
+   - 즐겨찾기 페이지 (`/favorites`)
+   - 복습 페이지 (`/review`)
+   - 단어 테스트 페이지 (`/test`)
+
+   **구현 방법:**
+   ```typescript
+   // middleware.ts - 특정 경로만 보호
+   const protectedPaths = ['/favorites', '/review', '/test']
+   const isProtectedPath = protectedPaths.some(path =>
+     request.nextUrl.pathname.startsWith(path)
+   )
+
+   if (isProtectedPath && !user) {
+     return NextResponse.redirect(new URL('/login', request.url))
+   }
+   ```
+
+   **클라이언트 컴포넌트 패턴:**
+   ```typescript
+   // 로그인 상태 확인 후 리디렉션
+   const [isLoggedIn, setIsLoggedIn] = useState(true)
+
+   useEffect(() => {
+     const checkAuth = async () => {
+       const supabase = createClient()
+       const { data: { user } } = await supabase.auth.getUser()
+       setIsLoggedIn(!!user)
+     }
+     checkAuth()
+   }, [])
+
+   const handleAction = () => {
+     if (!isLoggedIn) {
+       router.push('/login')
+       return
+     }
+     // 실제 액션 수행
+   }
+   ```
+
+### PWA 설정 (Progressive Web App)
+
+1. **PWA 플러그인 설정**
+   ```typescript
+   // next.config.ts
+   import withPWA from '@ducanh2912/next-pwa';
+
+   export default withPWA({
+     dest: 'public',
+     disable: process.env.NODE_ENV === 'development',
+     register: true,
+   })(nextConfig);
+   ```
+
+2. **Web App Manifest**
+   ```json
+   // public/manifest.json
+   {
+     "name": "Utavoca - Japanese Vocabulary Learning",
+     "short_name": "Utavoca",
+     "description": "일본 노래로 배우는 일본어 단어",
+     "start_url": "/",
+     "display": "standalone",
+     "background_color": "#ffffff",
+     "theme_color": "#3b82f6",
+     "icons": [
+       {
+         "src": "/icon-192x192.png",
+         "sizes": "192x192",
+         "type": "image/png"
+       },
+       {
+         "src": "/icon-512x512.png",
+         "sizes": "512x512",
+         "type": "image/png"
+       }
+     ]
+   }
+   ```
+
+3. **Layout 메타데이터**
+   ```typescript
+   // app/layout.tsx
+   export const metadata: Metadata = {
+     manifest: "/manifest.json",
+     appleWebApp: {
+       capable: true,
+       statusBarStyle: "default",
+       title: "Utavoca",
+     },
+   }
+   ```
+
+4. **Service Worker**
+   - 자동 생성: `public/sw.js`, `public/workbox-*.js`
+   - 오프라인 지원 및 캐싱 제공
+   - 프로덕션 빌드 시에만 활성화
+
+5. **설치 방법**
+   - **PC (Chrome):** 주소창 우측 설치 아이콘 클릭
+   - **Android:** 브라우저 메뉴 → "홈 화면에 추가"
+   - **iOS:** 공유 버튼 → "홈 화면에 추가"
+
+### UI/UX 가이드라인
+
+1. **버튼 텍스트 일관성**
+   - 버튼 이름은 로그인 상태와 무관하게 동일하게 유지
+   - 로그인이 필요한 액션은 클릭 시 로그인 페이지로 리디렉션
+
+   **좋은 예시:**
+   ```typescript
+   // FavoriteButton.tsx
+   <button onClick={handleToggle}>
+     <span>{isFavorited ? '즐겨찾기 해제' : '즐겨찾기 추가'}</span>
+   </button>
+
+   // 로그인 체크는 핸들러에서
+   const handleToggle = () => {
+     if (!isLoggedIn) {
+       router.push('/login')
+       return
+     }
+     // 즐겨찾기 토글
+   }
+   ```
+
+   **나쁜 예시:**
+   ```typescript
+   // ❌ 로그인 상태에 따라 버튼 텍스트 변경
+   <button>
+     {isLoggedIn ? '즐겨찾기 추가' : '로그인하고 즐겨찾기 추가'}
+   </button>
+   ```
+
+2. **네비게이션 일관성**
+   - 모든 주요 페이지에서 동일한 네비게이션 UI 제공
+   - 현재 페이지 하이라이트로 위치 표시
+   - 로그인/로그아웃 버튼은 항상 동일한 위치에 표시
+
+3. **공개/보호 기능 구분**
+   - 공개 기능: 누구나 사용 가능 (검색, 조회)
+   - 보호 기능: 로그인 필요 (즐겨찾기, 테스트, 복습)
+   - 보호 기능 사용 시 자연스럽게 로그인 유도
 
 ---
 
@@ -407,8 +564,11 @@ WHERE vocabs @> '[{"name": "愛"}]';
 **MVP (최소 기능):**
 - ✅ 가수, 노래, vocabs 관리
 - ✅ 즐겨찾기 (가수/노래 단위)
-- ✅ 랜덤 단어 테스트
+- ✅ 랜덤 단어 테스트 (3가지 모드: JP→KR, KR→JP, 랜덤)
 - ✅ 틀린 단어 복습
+- ✅ 다국어 퍼지 검색 (일본어, 영어, 한글)
+- ✅ 하이브리드 인증 (공개 조회 + 회원 기능)
+- ✅ PWA 지원 (PC/모바일 앱 설치)
 
 **Phase 2:**
 - 난이도별 학습 (beginner/intermediate/advanced)
@@ -434,23 +594,39 @@ WHERE vocabs @> '[{"name": "愛"}]';
 ## 개발 체크리스트
 
 ### Backend (Supabase)
-- [ ] 데이터베이스 스키마 생성
-- [ ] RLS 정책 설정
-- [ ] 인덱스 최적화
-- [ ] API 엔드포인트 설계
+- [x] 데이터베이스 스키마 생성
+- [x] RLS 정책 설정
+- [x] 인덱스 최적화 (pg_trgm, JSONB GIN)
+- [x] API 엔드포인트 설계
+- [x] 하이브리드 인증 시스템 구현
 
 ### LLM 통합
-- [ ] 프롬프트 엔지니어링
-- [ ] API 연동 (OpenAI, Claude 등)
+- [x] 프롬프트 엔지니어링 (2단계 검증 워크플로우)
+- [x] API 연동 (Claude Sonnet 4.5)
 - [ ] 에러 핸들링 및 재시도 로직
 - [ ] 배치 처리 구현
 
 ### Frontend (Next.js)
-- [ ] 가수/노래 검색 UI
-- [ ] 즐겨찾기 관리 UI
-- [ ] 단어 테스트 화면
-- [ ] 복습 모드 UI
+- [x] 가수/노래 검색 UI (다국어 퍼지 검색)
+- [x] 즐겨찾기 관리 UI
+- [x] 단어 테스트 화면 (3가지 모드)
+- [x] 복습 모드 UI
+- [x] 네비게이션 시스템
+- [x] UI 일관성 가이드라인 적용
 - [ ] 학습 통계 (선택)
+
+### PWA (Progressive Web App)
+- [x] PWA 플러그인 설정 (@ducanh2912/next-pwa)
+- [x] Web App Manifest 작성
+- [x] 앱 아이콘 생성 (192x192, 512x512)
+- [x] Service Worker 자동 생성 설정
+- [x] 메타데이터 설정 (iOS/Android 지원)
+
+### 배포 및 인증
+- [x] Vercel 배포 설정
+- [x] 환경 변수 관리 (.env.example)
+- [x] 미들웨어 기반 라우트 보호
+- [x] 공개/보호 페이지 분리
 
 ### 관리자 기능
 - [ ] 가사 업로드 인터페이스

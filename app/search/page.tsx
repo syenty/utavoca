@@ -37,15 +37,14 @@ export default function SearchPage() {
         data: { user },
       } = await supabase.auth.getUser()
 
-      if (!user) {
-        router.push('/login')
-      } else {
+      // 로그인 선택사항 (안 해도 검색 가능)
+      if (user) {
         setUserEmail(user.email)
       }
     }
 
     checkAuth()
-  }, [router, supabase])
+  }, [supabase])
 
   // 디바운스된 검색
   useEffect(() => {
@@ -83,10 +82,6 @@ export default function SearchPage() {
     activeTab === 'artists' ? [] : results.songs
 
   const totalResults = results.artists.length + results.songs.length
-
-  if (!userEmail) {
-    return null // 로딩 중
-  }
 
   return (
     <>

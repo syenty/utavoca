@@ -6,14 +6,10 @@ import Link from 'next/link'
 export default async function Home() {
   const supabase = await createClient()
 
-  // 로그인 확인
+  // 로그인 선택사항 (로그인 안 해도 콘텐츠 볼 수 있음)
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/login')
-  }
 
   // 전체 아티스트 조회 (복합 정렬: 즐겨찾기 수 DESC → 등록일 ASC → 노래 수 DESC → 이름 ASC)
   // @ts-ignore - Supabase type inference issue
@@ -36,7 +32,7 @@ export default async function Home() {
 
   return (
     <>
-      <Navigation userEmail={user.email} />
+      <Navigation userEmail={user?.email} />
 
       {/* 메인 컨텐츠 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
