@@ -24,10 +24,11 @@ interface TestResult {
   isCorrect: boolean
 }
 
-export default function TestPage({ params }: { params: { id: string } }) {
+export default function TestPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const supabase = createClient()
 
+  const [songId, setSongId] = useState<string>()
   const [userEmail, setUserEmail] = useState<string>()
   const [song, setSong] = useState<Song & { artist?: { name: string; name_ko: string | null } }>()
   const [testState, setTestState] = useState<TestState>('setup')
@@ -43,8 +44,15 @@ export default function TestPage({ params }: { params: { id: string } }) {
   const [showFeedback, setShowFeedback] = useState(false)
   const [selectedAnswer, setSelectedAnswer] = useState<string>()
 
+  // Unwrap params
+  useEffect(() => {
+    params.then(({ id }) => setSongId(id))
+  }, [params])
+
   // Load user and song
   useEffect(() => {
+    if (!songId) return
+
     const loadData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
@@ -56,7 +64,7 @@ export default function TestPage({ params }: { params: { id: string } }) {
       const { data: songData } = await supabase
         .from('songs')
         .select('*, artist:artists(name, name_ko)')
-        .eq('id', params.id)
+        .eq('id', songId)
         .single()
 
       if (songData) {
@@ -65,7 +73,7 @@ export default function TestPage({ params }: { params: { id: string } }) {
     }
 
     loadData()
-  }, [params.id, router, supabase])
+  }, [songId, router, supabase])
 
   // Generate questions
   const generateQuestions = () => {
@@ -158,7 +166,7 @@ export default function TestPage({ params }: { params: { id: string } }) {
     for (const result of wrongAnswers) {
       try {
         await recordWrongVocab(
-          params.id,
+          songId!,
           result.question.vocab.name,
           result.question.vocab.meaning,
           result.question.vocab.pronunciation
@@ -199,7 +207,7 @@ export default function TestPage({ params }: { params: { id: string } }) {
           <div>
             <div className="mb-8">
               <Link
-                href={`/songs/${params.id}`}
+                href={`/songs/${songId!}`}
                 className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 mb-4 inline-block"
               >
                 ← 노래로 돌아가기
@@ -486,7 +494,7 @@ export default function TestPage({ params }: { params: { id: string } }) {
                 </Link>
               )}
               <Link
-                href={`/songs/${params.id}`}
+                href={`/songs/${songId!}`}
                 className="py-3 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-semibold rounded-lg transition-colors text-center"
               >
                 노래로 돌아가기

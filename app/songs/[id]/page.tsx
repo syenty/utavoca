@@ -7,24 +7,22 @@ import VocabCard from '@/app/components/VocabCard'
 import type { Vocab } from '@/types/database'
 
 interface SongPageProps {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 export default async function SongPage({ params }: SongPageProps) {
+  const { id } = await params
   const supabase = await createClient()
 
-  // 로그인 확인
+  // 로그인 선택사항 (조회는 누구나 가능)
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user) {
-    redirect('/login')
-  }
-
   // 노래 정보 조회 (아티스트 정보 포함)
+  // @ts-ignore - Supabase type inference issue
   const { data: song, error: songError } = await supabase
     .from('songs')
     .select(
@@ -33,29 +31,35 @@ export default async function SongPage({ params }: SongPageProps) {
       artist:artists(id, name, name_en, name_ko, image_url)
     `
     )
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (songError || !song) {
     notFound()
   }
 
-  // 즐겨찾기 여부 확인
-  const { data: favorite } = await supabase
-    .from('favorites')
-    .select('id')
-    .eq('user_id', user.id)
-    .eq('favoritable_type', 'song')
-    .eq('favoritable_id', params.id)
-    .single()
+  // 즐겨찾기 여부 확인 (로그인한 경우만)
+  let isFavorited = false
+  if (user) {
+    // @ts-ignore - Supabase type inference issue
+    const { data: favorite } = await supabase
+      .from('favorites')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('favoritable_type', 'song')
+      .eq('favoritable_id', id)
+      .single()
 
-  const isFavorited = !!favorite
+    isFavorited = !!favorite
+  }
 
-  const vocabs = (song.vocabs as Vocab[]) || []
+  // Type assertion to work around Supabase type inference issues
+  const typedSong = song as any
+  const vocabs = (typedSong.vocabs as Vocab[]) || []
 
   return (
     <>
-      <Navigation userEmail={user.email} />
+      <Navigation userEmail={user?.email} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* 노래 헤더 */}
@@ -64,7 +68,7 @@ export default async function SongPage({ params }: SongPageProps) {
             {/* 노래 썸네일 */}
             <div className="flex-shrink-0">
               <div className="w-32 h-32 bg-gradient-to-br from-pink-400 to-purple-500 rounded-lg flex items-center justify-center text-white text-5xl font-bold shadow-lg">
-                {song.title.charAt(0)}
+                {typedSong.title.charAt(0)}
               </div>
             </div>
 
@@ -72,28 +76,28 @@ export default async function SongPage({ params }: SongPageProps) {
             <div className="flex-1">
               <div className="mb-4">
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">
-                  {song.title}
+                  {typedSong.title}
                 </h1>
 
                 {/* 아티스트 링크 */}
                 <Link
-                  href={`/artists/${song.artist.id}`}
+                  href={`/artists/${typedSong.artist.id}`}
                   className="inline-flex items-center gap-2 text-lg text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
                 >
-                  <span>{song.artist.name}</span>
-                  {song.artist.name_ko && (
+                  <span>{typedSong.artist.name}</span>
+                  {typedSong.artist.name_ko && (
                     <span className="text-gray-500 dark:text-gray-500">
-                      ({song.artist.name_ko})
+                      ({typedSong.artist.name_ko})
                     </span>
                   )}
                 </Link>
               </div>
 
               {/* 요약 */}
-              {song.summary && (
+              {typedSong.summary && (
                 <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-4">
                   <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                    {song.summary}
+                    {typedSong.summary}
                   </p>
                 </div>
               )}
@@ -108,13 +112,13 @@ export default async function SongPage({ params }: SongPageProps) {
 
                 <FavoriteButton
                   type="song"
-                  id={params.id}
+                  id={id}
                   initialIsFavorited={isFavorited}
                 />
 
                 {vocabs.length > 0 && (
                   <Link
-                    href={`/test/${params.id}`}
+                    href={user ? `/test/${id}` : '/login'}
                     className="inline-flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-medium rounded-lg transition-colors"
                   >
                     <span>✏️</span>

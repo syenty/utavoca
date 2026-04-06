@@ -5,28 +5,26 @@ import Link from 'next/link'
 import FavoriteButton from '@/app/components/FavoriteButton'
 
 interface ArtistPageProps {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 export default async function ArtistPage({ params }: ArtistPageProps) {
+  const { id } = await params
   const supabase = await createClient()
 
-  // 로그인 확인
+  // 로그인 선택사항 (조회는 누구나 가능)
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user) {
-    redirect('/login')
-  }
-
   // 아티스트 정보 조회
+  // @ts-ignore - Supabase type inference issue
   const { data: artist, error: artistError } = await supabase
     .from('artists')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (artistError || !artist) {
@@ -34,26 +32,35 @@ export default async function ArtistPage({ params }: ArtistPageProps) {
   }
 
   // 아티스트의 노래 목록 조회
+  // @ts-ignore - Supabase type inference issue
   const { data: songs } = await supabase
     .from('songs')
     .select('*')
-    .eq('artist_id', params.id)
+    .eq('artist_id', id)
     .order('title')
 
-  // 즐겨찾기 여부 확인
-  const { data: favorite } = await supabase
-    .from('favorites')
-    .select('id')
-    .eq('user_id', user.id)
-    .eq('favoritable_type', 'artist')
-    .eq('favoritable_id', params.id)
-    .single()
+  // 즐겨찾기 여부 확인 (로그인한 경우만)
+  let isFavorited = false
+  if (user) {
+    // @ts-ignore - Supabase type inference issue
+    const { data: favorite } = await supabase
+      .from('favorites')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('favoritable_type', 'artist')
+      .eq('favoritable_id', id)
+      .single()
 
-  const isFavorited = !!favorite
+    isFavorited = !!favorite
+  }
+
+  // Type assertions to work around Supabase type inference issues
+  const typedArtist = artist as any
+  const typedSongs = songs as any
 
   return (
     <>
-      <Navigation userEmail={user.email} />
+      <Navigation userEmail={user?.email} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* 아티스트 헤더 */}
@@ -62,33 +69,33 @@ export default async function ArtistPage({ params }: ArtistPageProps) {
             {/* 아티스트 아바타 */}
             <div className="flex-shrink-0">
               <div className="w-32 h-32 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full flex items-center justify-center text-white text-5xl font-bold shadow-lg">
-                {artist.name.charAt(0)}
+                {typedArtist.name.charAt(0)}
               </div>
             </div>
 
             {/* 아티스트 정보 */}
             <div className="flex-1 text-center md:text-left">
               <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-                {artist.name}
+                {typedArtist.name}
               </h1>
-              {artist.name_en && artist.name_en !== artist.name && (
+              {typedArtist.name_en && typedArtist.name_en !== typedArtist.name && (
                 <p className="text-xl text-gray-600 dark:text-gray-400 mb-2">
-                  {artist.name_en}
+                  {typedArtist.name_en}
                 </p>
               )}
-              {artist.name_ko && (
+              {typedArtist.name_ko && (
                 <p className="text-lg text-gray-500 dark:text-gray-500 mb-4">
-                  {artist.name_ko}
+                  {typedArtist.name_ko}
                 </p>
               )}
 
               <div className="flex items-center gap-4 justify-center md:justify-start">
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  {songs?.length || 0}곡
+                  {typedSongs?.length || 0}곡
                 </div>
                 <FavoriteButton
                   type="artist"
-                  id={params.id}
+                  id={id}
                   initialIsFavorited={isFavorited}
                 />
               </div>
@@ -102,9 +109,9 @@ export default async function ArtistPage({ params }: ArtistPageProps) {
             노래 목록
           </h2>
 
-          {songs && songs.length > 0 ? (
+          {typedSongs && typedSongs.length > 0 ? (
             <div className="grid gap-4">
-              {songs.map((song, index) => (
+              {typedSongs.map((song: any, index: number) => (
                 <Link
                   key={song.id}
                   href={`/songs/${song.id}`}

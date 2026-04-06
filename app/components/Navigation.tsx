@@ -53,21 +53,30 @@ export default function Navigation({ userEmail }: { userEmail?: string }) {
             ))}
           </div>
 
-          {/* 사용자 정보 & 로그아웃 */}
+          {/* 사용자 정보 & 로그인/로그아웃 */}
           <div className="flex items-center space-x-4">
-            {userEmail && (
-              <span className="hidden sm:block text-sm text-gray-600 dark:text-gray-400">
-                {userEmail}
-              </span>
-            )}
-            <form action={signOut}>
-              <button
-                type="submit"
+            {userEmail ? (
+              <>
+                <span className="hidden sm:block text-sm text-gray-600 dark:text-gray-400">
+                  {userEmail}
+                </span>
+                <form action={signOut}>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 rounded-md transition-colors"
+                  >
+                    로그아웃
+                  </button>
+                </form>
+              </>
+            ) : (
+              <Link
+                href="/login"
                 className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 rounded-md transition-colors"
               >
-                로그아웃
-              </button>
-            </form>
+                로그인
+              </Link>
+            )}
           </div>
         </div>
 

@@ -37,10 +37,15 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Optional: Add protected routes logic here
-  // if (!user && request.nextUrl.pathname.startsWith('/protected')) {
-  //   return NextResponse.redirect(new URL('/login', request.url))
-  // }
+  // 🔒 회원 전용 라우트 (로그인 필수)
+  const protectedPaths = ['/favorites', '/review', '/test']
+  const isProtectedPath = protectedPaths.some(path =>
+    request.nextUrl.pathname.startsWith(path)
+  )
+
+  if (isProtectedPath && !user) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
 
   return supabaseResponse
 }
