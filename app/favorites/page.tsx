@@ -15,62 +15,69 @@ export default async function FavoritesPage() {
     redirect('/login')
   }
 
-  // 즐겨찾기한 아티스트 조회
+  // favorites 테이블은 polymorphic (favoritable_id에 FK 없음)이라
+  // PostgREST 임베디드 조인 불가 → 2단계 fetch 후 메모리 join
   // @ts-ignore - Supabase type inference issue
-  const { data: artistFavorites } = await supabase
+  const { data: favoritesData } = await supabase
     .from('favorites')
-    .select(
-      `
-      id,
-      created_at,
-      favoritable_id,
-      artist:artists(id, name, name_en, name_ko, image_url)
-    `
-    )
+    .select('id, favoritable_id, favoritable_type, created_at')
     .eq('user_id', user.id)
-    .eq('favoritable_type', 'artist')
     .order('created_at', { ascending: false })
 
-  // 즐겨찾기한 노래 조회
-  // @ts-ignore - Supabase type inference issue
-  const { data: songFavorites } = await supabase
-    .from('favorites')
-    .select(
-      `
-      id,
-      created_at,
-      favoritable_id,
-      song:songs(
-        id,
-        title,
-        summary,
-        vocabs,
-        artist:artists(id, name, name_ko)
-      )
-    `
-    )
-    .eq('user_id', user.id)
-    .eq('favoritable_type', 'song')
-    .order('created_at', { ascending: false })
+  const favorites = (favoritesData as any[]) || []
 
-  // Type assertions to work around Supabase type inference issues
-  const typedArtistFavorites = artistFavorites as any
-  const typedSongFavorites = songFavorites as any
+  const artistFavorites = favorites.filter(
+    (f) => f.favoritable_type === 'artist'
+  )
+  const songFavorites = favorites.filter((f) => f.favoritable_type === 'song')
 
-  // 데이터 정리
-  const artists = typedArtistFavorites
-    ?.map((fav: any) => ({
-      favoriteId: fav.id,
-      ...fav.artist,
-    }))
-    .filter((item: any) => item.id) || []
+  const artistIds = artistFavorites.map((f) => f.favoritable_id)
+  const songIds = songFavorites.map((f) => f.favoritable_id)
 
-  const songs = typedSongFavorites
-    ?.map((fav: any) => ({
-      favoriteId: fav.id,
-      ...fav.song,
-    }))
-    .filter((item: any) => item.id) || []
+  const [artistsRes, songsRes] = await Promise.all([
+    artistIds.length > 0
+      ? supabase
+          .from('artists')
+          .select('id, name, name_en, name_ko, image_url')
+          .in('id', artistIds)
+      : Promise.resolve({ data: [] as any[] }),
+    songIds.length > 0
+      ? supabase
+          .from('songs')
+          .select(
+            `
+            id,
+            title,
+            summary,
+            vocabs,
+            artist:artists(id, name, name_ko)
+          `
+          )
+          .in('id', songIds)
+      : Promise.resolve({ data: [] as any[] }),
+  ])
+
+  const artistsById = new Map<string, any>(
+    ((artistsRes.data as any[]) || []).map((a) => [a.id, a])
+  )
+  const songsById = new Map<string, any>(
+    ((songsRes.data as any[]) || []).map((s) => [s.id, s])
+  )
+
+  // favorites 순서를 유지하면서 join, 누락된 entity는 제외
+  const artists = artistFavorites
+    .map((f) => {
+      const artist = artistsById.get(f.favoritable_id)
+      return artist ? { favoriteId: f.id, ...artist } : null
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+
+  const songs = songFavorites
+    .map((f) => {
+      const song = songsById.get(f.favoritable_id)
+      return song ? { favoriteId: f.id, ...song } : null
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
 
   return (
     <>

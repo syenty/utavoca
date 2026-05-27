@@ -48,7 +48,7 @@ export default async function SongPage({ params }: SongPageProps) {
       .eq('user_id', user.id)
       .eq('favoritable_type', 'song')
       .eq('favoritable_id', id)
-      .single()
+      .maybeSingle()
 
     isFavorited = !!favorite
   }
