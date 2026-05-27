@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
+import { deleteWrongVocab } from '@/app/actions/wrong-vocabs'
 import type { WrongVocab } from '@/types/database'
 
 interface ReviewListProps {
@@ -20,14 +21,15 @@ export default function ReviewList({ initialVocabs }: ReviewListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [flippedCards, setFlippedCards] = useState<Set<string>>(new Set())
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     setDeletingId(id)
     startTransition(async () => {
-      // TODO: API 호출로 삭제
-      // const result = await deleteWrongVocab(id)
-      // if (!result.error) {
-      setVocabs((prev) => prev.filter((v) => v.id !== id))
-      // }
+      const result = await deleteWrongVocab(id)
+      if (result.error) {
+        alert(`삭제에 실패했습니다: ${result.error}`)
+      } else {
+        setVocabs((prev) => prev.filter((v) => v.id !== id))
+      }
       setDeletingId(null)
     })
   }
@@ -70,14 +72,12 @@ export default function ReviewList({ initialVocabs }: ReviewListProps) {
         <h2 className="text-xl font-bold text-gray-900 dark:text-white">
           복습할 단어 ({vocabs.length}개)
         </h2>
-        <button
-          onClick={() => {
-            /* TODO: 복습 테스트 시작 */
-          }}
+        <Link
+          href="/review/test"
           className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors"
         >
           전체 복습 테스트
-        </button>
+        </Link>
       </div>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
