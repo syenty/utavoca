@@ -27,7 +27,9 @@ export default function FavoritesList({
     setRemovingId(artistId)
     startTransition(async () => {
       const result = await removeFavorite('artist', artistId)
-      if (!result.error) {
+      if (result.error) {
+        alert(`즐겨찾기 해제에 실패했습니다: ${result.error}`)
+      } else {
         setArtists((prev) => prev.filter((a) => a.id !== artistId))
       }
       setRemovingId(null)
@@ -38,7 +40,9 @@ export default function FavoritesList({
     setRemovingId(songId)
     startTransition(async () => {
       const result = await removeFavorite('song', songId)
-      if (!result.error) {
+      if (result.error) {
+        alert(`즐겨찾기 해제에 실패했습니다: ${result.error}`)
+      } else {
         setSongs((prev) => prev.filter((s) => s.id !== songId))
       }
       setRemovingId(null)

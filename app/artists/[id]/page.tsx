@@ -49,7 +49,7 @@ export default async function ArtistPage({ params }: ArtistPageProps) {
       .eq('user_id', user.id)
       .eq('favoritable_type', 'artist')
       .eq('favoritable_id', id)
-      .single()
+      .maybeSingle()
 
     isFavorited = !!favorite
   }

@@ -40,15 +40,17 @@ export default function FavoriteButton({
 
     startTransition(async () => {
       if (isFavorited) {
-        // 즐겨찾기 해제
         const result = await removeFavorite(type, id)
-        if (!result.error) {
+        if (result.error) {
+          alert(`즐겨찾기 해제에 실패했습니다: ${result.error}`)
+        } else {
           setIsFavorited(false)
         }
       } else {
-        // 즐겨찾기 추가
         const result = await addFavorite(type, id)
-        if (!result.error) {
+        if (result.error) {
+          alert(`즐겨찾기 추가에 실패했습니다: ${result.error}`)
+        } else {
           setIsFavorited(true)
         }
       }
