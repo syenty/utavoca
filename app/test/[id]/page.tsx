@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
@@ -43,6 +43,8 @@ export default function TestPage({ params }: { params: Promise<{ id: string }> }
   const [results, setResults] = useState<TestResult[]>([])
   const [showFeedback, setShowFeedback] = useState(false)
   const [selectedAnswer, setSelectedAnswer] = useState<string>()
+  const [saveStatus, setSaveStatus] = useState<{ failed: number; total: number } | null>(null)
+  const pendingSavesRef = useRef<Promise<unknown>[]>([])
 
   // Unwrap params
   useEffect(() => {
@@ -122,6 +124,34 @@ export default function TestPage({ params }: { params: Promise<{ id: string }> }
     setTestState('testing')
   }
 
+  // Persist a wrong answer immediately, fire-and-forget
+  const persistWrongAnswer = (q: Question) => {
+    const promise = recordWrongVocab(
+      songId!,
+      q.vocab.name,
+      q.vocab.meaning,
+      q.vocab.pronunciation
+    )
+      .then((res) => {
+        const failedDelta = res?.error ? 1 : 0
+        if (res?.error) {
+          console.error('Failed to save wrong vocab:', res.error)
+        }
+        setSaveStatus((prev) => ({
+          total: (prev?.total ?? 0) + 1,
+          failed: (prev?.failed ?? 0) + failedDelta,
+        }))
+      })
+      .catch((error) => {
+        console.error('Failed to save wrong vocab:', error)
+        setSaveStatus((prev) => ({
+          total: (prev?.total ?? 0) + 1,
+          failed: (prev?.failed ?? 0) + 1,
+        }))
+      })
+    pendingSavesRef.current.push(promise)
+  }
+
   // Handle answer selection
   const handleAnswer = (answer: string) => {
     if (showFeedback) return
@@ -140,6 +170,10 @@ export default function TestPage({ params }: { params: Promise<{ id: string }> }
         isCorrect,
       },
     ])
+
+    if (!isCorrect) {
+      persistWrongAnswer(currentQuestion)
+    }
   }
 
   // Next question
@@ -150,33 +184,8 @@ export default function TestPage({ params }: { params: Promise<{ id: string }> }
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1)
     } else {
-      // Test finished
       setTestState('result')
-      saveResults()
     }
-  }
-
-  // Save wrong answers to database
-  const saveResults = async () => {
-    if (!song) return
-
-    const wrongAnswers = results.filter((r) => !r.isCorrect)
-
-    // Save each wrong answer to wrong_vocabs table
-    for (const result of wrongAnswers) {
-      try {
-        await recordWrongVocab(
-          songId!,
-          result.question.vocab.name,
-          result.question.vocab.meaning,
-          result.question.vocab.pronunciation
-        )
-      } catch (error) {
-        console.error('Failed to save wrong vocab:', error)
-      }
-    }
-
-    console.log(`✅ Saved ${wrongAnswers.length} wrong answers to database`)
   }
 
   // Restart test
@@ -187,6 +196,8 @@ export default function TestPage({ params }: { params: Promise<{ id: string }> }
     setQuestions([])
     setShowFeedback(false)
     setSelectedAnswer(undefined)
+    setSaveStatus(null)
+    pendingSavesRef.current = []
   }
 
   if (!userEmail || !song) {
@@ -440,10 +451,26 @@ export default function TestPage({ params }: { params: Promise<{ id: string }> }
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white">
                     틀린 문제 ({results.filter((r) => !r.isCorrect).length}개)
                   </h3>
-                  <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-                    <span>✓</span>
-                    <span>복습 노트에 저장됨</span>
-                  </div>
+                  {saveStatus && (
+                    saveStatus.failed === 0 ? (
+                      <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                        <span>✓</span>
+                        <span>복습 노트에 저장됨</span>
+                      </div>
+                    ) : saveStatus.failed === saveStatus.total ? (
+                      <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+                        <span>⚠</span>
+                        <span>저장 실패</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
+                        <span>⚠</span>
+                        <span>
+                          {saveStatus.total - saveStatus.failed}/{saveStatus.total} 저장됨
+                        </span>
+                      </div>
+                    )
+                  )}
                 </div>
                 <div className="space-y-4">
                   {results

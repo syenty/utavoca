@@ -172,6 +172,16 @@ export interface Database {
           artist_name: string
         }[]
       }
+      record_wrong_vocab: {
+        Args: {
+          p_user_id: string
+          p_song_id: string
+          p_vocab_name: string
+          p_vocab_meaning: string
+          p_vocab_pronunciation: string
+        }
+        Returns: undefined
+      }
       search_artists_fuzzy: {
         Args: { search_query: string }
         Returns: {
